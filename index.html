@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Мини-таймер учёта рабочего времени: старт, стоп, комментарий и итоги за месяц. Работает как один файл index.html на GitHub Pages.">
+<title>Таймер задач — учёт времени</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%8F%B1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#eef1f8; --card:#ffffff; --text:#191d2b; --muted:#69708a; --line:#e7e9f2;
+  --accent:#6366f1; --accent2:#8b5cf6; --danger:#f43f5e; --ok:#10b981;
+  --shadow:0 12px 32px rgba(28,32,60,.09); --radius:20px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1120; --card:#171b2e; --text:#e9ebf5; --muted:#98a0bb; --line:#272c46;
+    --shadow:0 12px 32px rgba(0,0,0,.4);
+  }
+}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color:var(--text); min-height:100vh; line-height:1.5;
+  background:
+    radial-gradient(60vw 40vw at 100% -10%, rgba(99,102,241,.14), transparent 60%),
+    radial-gradient(50vw 35vw at -10% 0%, rgba(139,92,246,.12), transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+}
+.wrap{max-width:760px;margin:0 auto;padding:28px 16px 64px}
+.hidden{display:none!important}
+
+/* ---------- header ---------- */
+header{display:flex;gap:14px;align-items:center;justify-content:center;margin:8px 0 22px}
+.logo{width:52px;height:52px;flex:0 0 auto;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:26px;box-shadow:var(--shadow)}
+h1{font-size:24px;letter-spacing:-.02em}
+header p{color:var(--muted);font-size:13.5px}
+
+/* ---------- cards & buttons ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:18px}
+.btn{font:inherit;border:none;border-radius:14px;padding:12px 18px;cursor:pointer;background:var(--card);color:var(--text);transition:transform .08s,box-shadow .2s,background .2s}
+.btn:active{transform:scale(.97)}
+.btn.big{width:100%;padding:16px;font-size:18px;font-weight:700;color:#fff;border-radius:16px}
+.btn.start{background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 8px 22px rgba(99,102,241,.35)}
+.btn.stop{background:linear-gradient(135deg,#f43f5e,#fb7185);box-shadow:0 8px 22px rgba(244,63,94,.35)}
+.btn.big:disabled{background:var(--line);color:var(--muted);box-shadow:none;cursor:not-allowed}
+.btn.primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:600}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+.btn.ghost:hover{color:var(--text);border-color:var(--accent)}
+.btn.small{padding:8px 14px;font-size:13px;border-radius:10px}
+
+/* ---------- timer ---------- */
+.timer-card{text-align:center}
+.status{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.status.running{color:var(--ok);border-color:rgba(16,185,129,.4)}
+.status.running .dot{background:var(--ok);animation:pulse 1.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.45)}70%{box-shadow:0 0 0 9px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.display{font-size:clamp(54px,13vw,84px);font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums;margin:10px 0 2px}
+.since{color:var(--muted);font-size:14px;min-height:21px;margin-bottom:16px}
+.kbd-hint{font-size:12px;color:var(--muted);margin-top:10px}
+kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:11px;background:var(--card)}
+
+/* ---------- pending (comment) ---------- */
+.pending{margin-top:18px;text-align:left;border:1px dashed var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:16px;background:rgba(99,102,241,.06)}
+.pending-info{font-weight:600;margin-bottom:10px;font-variant-numeric:tabular-nums}
+#commentInput{width:100%;min-height:76px;resize:vertical;font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;outline:none}
+#commentInput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.16)}
+.pending-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+.hint{font-size:12px;color:var(--muted);margin-top:8px}
+
+/* ---------- month & stats ---------- */
+.month-nav{display:flex;align-items:center;gap:10px}
+.month-nav h2{font-size:20px;text-align:center;flex:1;letter-spacing:-.01em}
+.nav-btn{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:20px;line-height:1;cursor:pointer}
+.nav-btn:hover{background:rgba(99,102,241,.09);border-color:var(--accent)}
+.month-sub{display:flex;justify-content:center;margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.stat{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center}
+.stat-value{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat:first-child .stat-value{color:var(--accent)}
+.stat-label{font-size:12px;color:var(--muted);margin-top:2px}
+.exports{display:flex;flex-wrap:wrap;gap:10px}
+@media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
+
+/* ---------- manual add ---------- */
+.manual{border:1px solid var(--line);border-radius:14px;padding:2px 14px;margin-bottom:16px}
+.manual summary{cursor:pointer;padding:11px 0;font-weight:600;color:var(--muted);user-select:none}
+.manual summary:hover{color:var(--text)}
+.manual-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding-bottom:14px}
+.manual-grid label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.manual-grid input{font:inherit;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 10px;outline:none}
+.manual-grid input:focus{border-color:var(--accent)}
+.manual-grid .wide{grid-column:1/-1}
+
+/* ---------- log ---------- */
+.day-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:12px 2px 6px;font-weight:700}
+.day-total{color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.row{display:grid;grid-template-columns:118px 92px 1fr auto;gap:10px;align-items:center;padding:11px 2px;border-top:1px solid var(--line);font-size:14px}
+.row-time{font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap}
+.row-dur{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row-comment{word-break:break-word;min-width:0}
+.no-comment{color:var(--muted);opacity:.75;font-style:italic}
+.row-actions{display:flex;gap:6px}
+.icon{width:32px;height:32px;border-radius:9px;border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer;font-size:14px;line-height:1}
+.icon:hover{color:var(--text);border-color:var(--accent)}
+.icon.del:hover{color:#fff;background:var(--danger);border-color:var(--danger)}
+.edit-input{width:100%;font:inherit;font-size:14px;color:var(--text);background:var(--card);border:1px solid var(--accent);border-radius:8px;padding:6px 8px;outline:none}
+@media(max-width:560px){
+  .row{grid-template-columns:1fr auto;grid-template-areas:"time dur" "comment actions";row-gap:4px}
+  .row-time{grid-area:time}.row-dur{grid-area:dur}.row-comment{grid-area:comment}.row-actions{grid-area:actions;justify-content:flex-end}
+}
+.empty{text-align:center;color:var(--muted);padding:34px 10px;font-size:14.5px}
+
+footer{text-align:center;color:var(--muted);font-size:13px;margin-top:26px;line-height:1.7}
+footer code{border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:12px}
+
+/* ---------- облачная синхронизация ---------- */
+.sync-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:-10px 0 18px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px}
+.sync-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+.sync-dot.ok{background:var(--ok)}
+.sync-dot.busy{background:#f59e0b;animation:pulse 1.4s infinite}
+.sync-dot.err{background:var(--danger)}
+.sync-dot.dirty{background:var(--accent)}
+.sync-text{flex:1;min-width:140px;color:var(--muted)}
+.sync-text b{color:var(--text);font-weight:600}
+.sync-card summary{cursor:pointer;font-weight:600;padding:2px 0;user-select:none}
+.sync-card summary:hover{color:var(--accent)}
+.sync-field{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.sync-field label{font-size:12px;color:var(--muted)}
+.sync-field input{font:inherit;font-size:14px;color:var(--text);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;outline:none}
+.sync-field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.16)}
+.sync-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+.sync-msg{margin-top:12px;font-size:13px;color:var(--muted);line-height:1.65}
+.sync-msg ol{margin:6px 0 0 18px}
+.sync-msg code{border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">⏱️</div>
+    <div>
+      <h1>Таймер задач</h1>
+      <p>Старт → Стоп → комментарий. Итоги за месяц считаются автоматически.</p>
+    </div>
+  </header>
+
+  <!-- ======= СТАТУС СИНХРОНИЗАЦИИ ======= -->
+  <div class="sync-bar">
+    <span class="sync-dot" id="syncDot"></span>
+    <span class="sync-text" id="syncText">Облако не подключено — записи хранятся только на этом устройстве</span>
+    <button class="btn small ghost hidden" id="syncNow">↻ Обновить</button>
+    <button class="btn small ghost" id="syncOpen">⚙ Облако</button>
+  </div>
+
+  <!-- ======= ТАЙМЕР ======= -->
+  <section class="card timer-card">
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Готов к работе</span></div>
+    <div class="display" id="display">00:00:00</div>
+    <div class="since" id="since"></div>
+    <button id="toggleBtn" class="btn big start">▶&nbsp; Старт</button>
+    <div class="kbd-hint">Пробел — старт / стоп</div>
+
+    <div class="pending hidden" id="pendingPanel">
+      <div class="pending-info" id="pendingInfo"></div>
+      <textarea id="commentInput" placeholder="Что вы делали? Например: созвон с клиентом, правки макета, отчёт…"></textarea>
+      <div class="pending-actions">
+        <button id="saveComment" class="btn primary">💾 Сохранить запись</button>
+        <button id="discardPending" class="btn ghost">Удалить сессию</button>
+      </div>
+      <div class="hint">Ctrl + Enter — быстрое сохранение</div>
+    </div>
+  </section>
+
+  <!-- ======= ИТОГИ ЗА МЕСЯЦ ======= -->
+  <section class="card">
+    <div class="month-nav">
+      <button class="nav-btn" id="prevMonth" title="Предыдущий месяц">‹</button>
+      <h2 id="monthTitle">—</h2>
+      <button class="nav-btn" id="nextMonth" title="Следующий месяц">›</button>
+    </div>
+    <div class="month-sub"><button id="thisMonth" class="btn small ghost hidden">К текущему месяцу</button></div>
+
+    <div class="stats">
+      <div class="stat"><div class="stat-value" id="stTotal">0 мин</div><div class="stat-label">Итого за месяц</div></div>
+      <div class="stat"><div class="stat-value" id="stSessions">0</div><div class="stat-label">Сессий</div></div>
+      <div class="stat"><div class="stat-value" id="stDays">0</div><div class="stat-label">Дней с записями</div></div>
+      <div class="stat"><div class="stat-value" id="stAvg">—</div><div class="stat-label">Среднее в день</div></div>
+    </div>
+
+    <div class="exports">
+      <button id="csvBtn" class="btn small ghost">⬇ CSV за месяц (Excel)</button>
+      <button id="jsonBtn" class="btn small ghost">⬇ JSON — резервная копия</button>
+      <label class="btn small ghost">⬆ Импорт JSON<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+    </div>
+  </section>
+
+  <!-- ======= ЖУРНАЛ ======= -->
+  <section class="card">
+    <details class="manual">
+      <summary>＋ Добавить запись вручную</summary>
+      <div class="manual-grid">
+        <label>Дата<input type="date" id="mDate"></label>
+        <label></label>
+        <label>Время с<input type="time" id="mFrom"></label>
+        <label>Время по<input type="time" id="mTo"></label>
+        <label class="wide">Комментарий<input type="text" id="mComment" placeholder="Что делали?"></label>
+        <div class="wide"><button id="mAdd" class="btn primary" style="width:100%">Добавить запись</button></div>
+      </div>
+    </details>
+
+    <div id="log"></div>
+    <div class="empty hidden" id="emptyState">За этот месяц записей пока нет.<br>Нажмите «Старт», чтобы начать первую сессию. 🚀</div>
+  </section>
+
+  <!-- ======= ОБЛАКО: режим «всё в одном» (внутри Google) ======= -->
+  <section class="card hidden" id="hostedCard">
+    <div style="font-weight:700;margin-bottom:8px">☁️ Все устройства видят одни и те же записи</div>
+    <div class="sync-msg" style="margin-top:0">
+      Приложение подключено к вашей Google Таблице. Ничего настраивать не нужно:
+      откройте этот же адрес на телефоне — записи будут общими.
+    </div>
+    <div class="sync-actions">
+      <a class="btn primary small" id="sheetLink" href="#" target="_blank" rel="noopener">📊 Открыть таблицу с данными</a>
+      <button class="btn ghost small" id="hostedSync">↻ Синхронизировать сейчас</button>
+    </div>
+  </section>
+
+  <!-- ======= ОБЛАКО (синхронизация между устройствами) ======= -->
+  <section class="card">
+    <details id="syncCard">
+      <summary class="sync-card">☁️ Синхронизация между устройствами (телефон ↔ компьютер)</summary>
+
+      <div class="sync-msg">
+        Записи всегда сохраняются в браузере — они не пропадут при перезагрузке страницы.
+        Чтобы они были видны ещё и на другом устройстве, подключите бесплатное облако:
+        <b>Google Apps Script + Google Таблица</b> (файл <code>apps-script/Code.gs</code> из репозитория).
+        <ol>
+          <li>Откройте <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com</a> → новый проект.</li>
+          <li>Вставьте код из <code>Code.gs</code>, сохраните и запустите функцию <code>setup</code> (разрешите доступ).
+              В логе появится ссылка на таблицу и <b>ключ</b>.</li>
+          <li><b>Развернуть → Новое развёртывание → тип «Веб-приложение»</b>: запуск от имени <b>«Я»</b>,
+              доступ <b>«Все»</b>. Скопируйте URL, заканчивающийся на <code>/exec</code>.</li>
+          <li>Вставьте URL и ключ ниже на <b>каждом</b> устройстве и нажмите «Сохранить» → «Проверить связь».</li>
+        </ol>
+        <div style="margin-top:8px;font-size:12.5px;opacity:.85">
+          Альтернатива без настройки: откройте файл <code>apps-script/app.html</code> через
+          «Развернуть → Веб-приложение» — тогда облако подключено сразу, без URL и ключа.
+        </div>
+      </div>
+
+      <div class="sync-field">
+        <label for="cloudUrl">URL веб-приложения (…/exec)</label>
+        <input type="url" id="cloudUrl" placeholder="https://script.google.com/macros/s/AKfy…/exec" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="sync-field">
+        <label for="cloudKey">Ключ доступа</label>
+        <input type="text" id="cloudKey" placeholder="ключ из функции setup()" autocomplete="off" spellcheck="false">
+      </div>
+
+      <div class="sync-actions">
+        <button class="btn primary" id="cloudSave">Сохранить</button>
+        <button class="btn ghost small" id="cloudTest">Проверить связь</button>
+        <button class="btn ghost small" id="cloudPushAll">⬆ Отправить всё в облако</button>
+        <button class="btn ghost small" id="cloudPull">⬇ Забрать из облака</button>
+      </div>
+      <div class="sync-msg" id="cloudMsg">Синхронизация не настроена.</div>
+    </details>
+  </section>
+
+  <footer>
+    Записи хранятся в вашем браузере (localStorage) — перезагрузка страницы им не страшна.<br>
+    Для доступа с телефона и компьютера включите облако ☁️ выше. Резервная копия — кнопка JSON.
+  </footer>
+</div>
+
+<script>
+'use strict';
+/* ================= хранилище ================= */
+const LS = { rec:'tt.v1.records', run:'tt.v1.running', pend:'tt.v1.pending' };
+const read  = (k,def)=>{ try{ const v=localStorage.getItem(k); return v===null?def:JSON.parse(v); }catch(e){ return def; } };
+const writeRaw = (k,v)=>{ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} };
+/* обёртка: любое изменение журнала помечаем для облачной синхронизации */
+function write(k,v){
+  if(k===LS.rec && typeof syncOnRecordsWrite==='function') syncOnRecordsWrite(v);
+  writeRaw(k,v);
+}
+
+let records = read(LS.rec, []);      // [{id,start,end,comment}]
+let running = read(LS.run, null);    // {start} | null
+let pending = read(LS.pend, null);   // {start,end} | null — ждёт комментария
+
+const now = new Date();
+let cursor = { y: now.getFullYear(), m: now.getMonth() }; // отображаемый месяц
+
+/* ================= элементы ================= */
+const $ = s => document.querySelector(s);
+const display=$('#display'), sinceEl=$('#since'), toggleBtn=$('#toggleBtn'),
+      statusEl=$('#status'), statusText=$('#statusText'),
+      pendingPanel=$('#pendingPanel'), pendingInfo=$('#pendingInfo'), commentInput=$('#commentInput'),
+      monthTitle=$('#monthTitle'), thisMonthBtn=$('#thisMonth'),
+      logEl=$('#log'), emptyState=$('#emptyState');
+const baseTitle = document.title;
+
+/* ================= форматтеры ================= */
+const pad = n => String(n).padStart(2,'0');
+function clock(ms){ const s=Math.floor(ms/1000); return pad(Math.floor(s/3600))+':'+pad(Math.floor(s/60)%60)+':'+pad(s%60); }
+function fmtDur(ms){
+  const t=Math.round(ms/60000), h=Math.floor(t/60), m=t%60;
+  if(h&&m) return h+' ч '+m+' мин';
+  if(h) return h+' ч';
+  return m+' мин';
+}
+function timeHM(ts){ return new Date(ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
+function dateDMY(ts){ const d=new Date(ts); return pad(d.getDate())+'.'+pad(d.getMonth()+1)+'.'+d.getFullYear(); }
+function dateKey(ts){ const d=new Date(ts); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function dayLabel(key){
+  const [y,m,d]=key.split('-').map(Number);
+  let s=new Date(y,m-1,d).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  s=s.charAt(0).toUpperCase()+s.slice(1);
+  return key===dateKey(Date.now()) ? s+' · сегодня' : s;
+}
+function monthName(c){
+  const s=new Date(c.y,c.m,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inMonth = (ts,c)=>{ const d=new Date(ts); return d.getFullYear()===c.y && d.getMonth()===c.m; };
+const monthRecs = ()=> records.filter(r=>inMonth(r.start,cursor)).sort((a,b)=>a.start-b.start);
+
+/* ================= таймер ================= */
+function tick(){
+  if(running){
+    const ms=Date.now()-running.start;
+    display.textContent=clock(ms);
+    document.title='⏱ '+clock(ms)+' — '+baseTitle;
+  }
+}
+setInterval(tick,250);
+
+function updateUI(){
+  statusEl.classList.toggle('running', !!running);
+  if(running){
+    toggleBtn.className='btn big stop'; toggleBtn.innerHTML='■&nbsp; Стоп'; toggleBtn.disabled=false;
+    statusText.textContent='Идёт запись';
+    sinceEl.textContent='Идёт с '+timeHM(running.start)+(dateKey(running.start)!==dateKey(Date.now())?' · '+dateDMY(running.start):'');
+  }else{
+    toggleBtn.className='btn big start'; toggleBtn.innerHTML='▶&nbsp; Старт';
+    document.title=baseTitle;
+    if(pending){
+      toggleBtn.disabled=true;
+      statusText.textContent='Сессия завершена — добавьте комментарий';
+      sinceEl.textContent='';
+      display.textContent=clock(pending.end-pending.start);
+      pendingInfo.textContent='Сессия: '+dateDMY(pending.start)+' · '+timeHM(pending.start)+' – '+timeHM(pending.end)+' · '+fmtDur(pending.end-pending.start);
+    }else{
+      toggleBtn.disabled=false;
+      statusText.textContent='Готов к работе';
+      sinceEl.textContent='';
+      display.textContent='00:00:00';
+    }
+  }
+  pendingPanel.classList.toggle('hidden', !pending);
+}
+
+toggleBtn.addEventListener('click', ()=>{
+  if(running){ // ---- СТОП ----
+    pending={ start:running.start, end:Date.now() };
+    running=null;
+    write(LS.run,null); write(LS.pend,pending);
+    commentInput.value='';
+    updateUI();
+    setTimeout(()=>commentInput.focus(),60);
+  }else if(!pending){ // ---- СТАРТ ----
+    running={ start:Date.now() };
+    write(LS.run,running);
+    updateUI(); tick();
+  }
+});
+
+function savePending(){
+  if(!pending) return;
+  records.push({ id:uid(), start:pending.start, end:pending.end, comment:commentInput.value.trim() });
+  const d=new Date(pending.start); cursor={y:d.getFullYear(), m:d.getMonth()};
+  pending=null;
+  write(LS.rec,records); write(LS.pend,null);
+  updateUI(); render();
+}
+$('#saveComment').addEventListener('click', savePending);
+commentInput.addEventListener('keydown', e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) savePending(); });
+$('#discardPending').addEventListener('click', ()=>{
+  if(confirm('Удалить эту сессию без сохранения?')){ pending=null; write(LS.pend,null); updateUI(); }
+});
+
+/* пробел = старт/стоп (вне полей ввода) */
+document.addEventListener('keydown', e=>{
+  const t=e.target, typing=t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+  if(e.code==='Space'&&!typing){ e.preventDefault(); if(!toggleBtn.disabled) toggleBtn.click(); }
+});
+
+/* ================= журнал и итоги ================= */
+function render(){
+  monthTitle.textContent=monthName(cursor);
+  const cur=new Date();
+  thisMonthBtn.classList.toggle('hidden', cursor.y===cur.getFullYear()&&cursor.m===cur.getMonth());
+
+  const recs=monthRecs();
+  const total=recs.reduce((s,r)=>s+(r.end-r.start),0);
+  const days=new Set(recs.map(r=>dateKey(r.start)));
+  $('#stTotal').textContent=fmtDur(total);
+  $('#stSessions').textContent=recs.length;
+  $('#stDays').textContent=days.size;
+  $('#stAvg').textContent=days.size?fmtDur(total/days.size):'—';
+
+  emptyState.classList.toggle('hidden', recs.length>0);
+  logEl.innerHTML='';
+  const keys=[...days].sort().reverse();
+  for(const k of keys){
+    const dayRecs=recs.filter(r=>dateKey(r.start)===k);
+    const dayTotal=dayRecs.reduce((s,r)=>s+(r.end-r.start),0);
+    const g=document.createElement('div'); g.className='day';
+    const head=document.createElement('div'); head.className='day-head';
+    head.innerHTML='<span>'+dayLabel(k)+'</span><span class="day-total">'+fmtDur(dayTotal)+'</span>';
+    g.appendChild(head);
+    for(const r of dayRecs){
+      const row=document.createElement('div'); row.className='row'; row.dataset.id=r.id;
+      const commentHtml=r.comment
+        ? escapeHtml(r.comment).replace(/\n/g,'<br>')
+        : '<span class="no-comment">без комментария</span>';
+      row.innerHTML=
+        '<div class="row-time">'+timeHM(r.start)+' – '+timeHM(r.end)+'</div>'+
+        '<div class="row-dur">'+fmtDur(r.end-r.start)+'</div>'+
+        '<div class="row-comment">'+commentHtml+'</div>'+
+        '<div class="row-actions">'+
+          '<button class="icon edit" title="Изменить комментарий">✎</button>'+
+          '<button class="icon del" title="Удалить запись">✕</button>'+
+        '</div>';
+      g.appendChild(row);
+    }
+    logEl.appendChild(g);
+  }
+}
+
+logEl.addEventListener('click', e=>{
+  const btn=e.target.closest('button'); if(!btn) return;
+  const row=e.target.closest('.row');   if(!row) return;
+  const rec=records.find(r=>r.id===row.dataset.id); if(!rec) return;
+
+  if(btn.classList.contains('del')){
+    if(confirm('Удалить запись '+timeHM(rec.start)+' – '+timeHM(rec.end)+' ('+fmtDur(rec.end-rec.start)+')?')){
+      records=records.filter(r=>r.id!==rec.id);
+      write(LS.rec,records); render();
+    }
+  }
+  if(btn.classList.contains('edit')){
+    const c=row.querySelector('.row-comment');
+    c.innerHTML='';
+    const inp=document.createElement('input');
+    inp.type='text'; inp.className='edit-input'; inp.value=rec.comment||'';
+    c.appendChild(inp); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length);
+    let done=false;
+    const finish=save=>{
+      if(done) return; done=true;
+      if(save){ rec.comment=inp.value.trim(); write(LS.rec,records); }
+      render();
+    };
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter')finish(true); if(ev.key==='Escape')finish(false); });
+    inp.addEventListener('blur', ()=>finish(true));
+  }
+});
+
+/* ================= навигация по месяцам ================= */
+$('#prevMonth').addEventListener('click', ()=>{ cursor.m--; if(cursor.m<0){cursor.m=11;cursor.y--;} render(); });
+$('#nextMonth').addEventListener('click', ()=>{ cursor.m++; if(cursor.m>11){cursor.m=0;cursor.y++;} render(); });
+thisMonthBtn.addEventListener('click', ()=>{ const d=new Date(); cursor={y:d.getFullYear(),m:d.getMonth()}; render(); });
+
+/* ================= экспорт / импорт ================= */
+function download(blob, name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+$('#csvBtn').addEventListener('click', ()=>{
+  const recs=monthRecs();
+  if(!recs.length){ alert('За '+monthName(cursor).toLowerCase()+' записей нет.'); return; }
+  const q=v=>'"'+String(v).replace(/"/g,'""').replace(/\n/g,' ⏎ ')+'"';
+  const lines=['sep=;','Дата;Начало;Конец;Длительность;Минут;Комментарий'];
+  let total=0;
+  for(const r of recs){
+    total+=r.end-r.start;
+    lines.push([dateDMY(r.start),timeHM(r.start),timeHM(r.end),fmtDur(r.end-r.start),Math.round((r.end-r.start)/60000),q(r.comment||'')].join(';'));
+  }
+  lines.push(['Итого','','',fmtDur(total),Math.round(total/60000),''].join(';'));
+  download(new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),
+    'otchet-'+cursor.y+'-'+pad(cursor.m+1)+'.csv');
+});
+$('#jsonBtn').addEventListener('click', ()=>{
+  download(new Blob([JSON.stringify({app:'time-tracker',version:1,exportedAt:new Date().toISOString(),records:records},null,2)],{type:'application/json'}),
+    'time-tracker-backup.json');
+});
+$('#importFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const data=JSON.parse(rd.result);
+      const arr=Array.isArray(data)?data:data.records;
+      if(!Array.isArray(arr)) throw 0;
+      const clean=arr.filter(r=>r&&typeof r.start==='number'&&typeof r.end==='number'&&r.end>r.start)
+                     .map(r=>({id:String(r.id||uid()),start:r.start,end:r.end,comment:String(r.comment||'')}));
+      if(!clean.length) throw 0;
+      if(!confirm('Импортировать '+clean.length+' записей? Текущие данные будут ЗАМЕНЕНЫ.')) return;
+      records=clean; write(LS.rec,records);
+      const d=new Date(); cursor={y:d.getFullYear(),m:d.getMonth()};
+      render(); alert('Готово: импортировано '+clean.length+' записей.');
+    }catch(_){ alert('Не удалось прочитать файл. Нужен JSON, созданный этим приложением.'); }
+  };
+  rd.readAsText(f); e.target.value='';
+});
+
+/* ================= ручное добавление ================= */
+const mDate=$('#mDate'), mFrom=$('#mFrom'), mTo=$('#mTo'), mComment=$('#mComment');
+mDate.value=dateKey(Date.now());
+$('#mAdd').addEventListener('click', ()=>{
+  if(!mDate.value||!mFrom.value||!mTo.value){ alert('Заполните дату и время «с» / «по».'); return; }
+  const [y,mo,da]=mDate.value.split('-').map(Number);
+  const [fh,fm]=mFrom.value.split(':').map(Number);
+  const [th,tm]=mTo.value.split(':').map(Number);
+  const start=new Date(y,mo-1,da,fh,fm).getTime();
+  const end  =new Date(y,mo-1,da,th,tm).getTime();
+  if(end<=start){ alert('Время окончания должно быть позже начала.'); return; }
+  records.push({id:uid(),start,end,comment:mComment.value.trim()});
+  write(LS.rec,records);
+  cursor={y:y,m:mo-1}; mComment.value='';
+  render();
+});
+
+/* ================= init ================= */
+updateUI();
+render();
+tick();
+</script>
+<script>
+'use strict';
+/* ==================================================================================
+   ОБЛАКО: синхронизация записей между устройствами
+   Транспорт — Google Apps Script (файл apps-script/Code.gs), хранилище — Google Таблица.
+   Чтение  : JSONP GET   ?action=pull&key=...
+   Запись  : POST (text/plain, no-cors)  {key, records, tombs}
+   Если облако не настроено — приложение работает как раньше, данные в localStorage.
+   ================================================================================== */
+
+const SYNC_CFG_KEY  = 'tt.v1.cloud';   // {url, key}
+const SYNC_TOMB_KEY = 'tt.v1.tomb';    // [{id, upd}] — отметки об удалении
+
+let syncTombs   = read(SYNC_TOMB_KEY, []);
+let syncSnap    = new Map();           // id -> подпись содержимого (поиск локальных правок)
+let syncDirty   = false;               // есть локальные изменения, не отправленные в облако
+let syncBusy    = false;
+let syncLastOk  = 0;
+let syncCbSeq   = 0;
+
+const syncEl = id => document.getElementById(id);
+
+/* Режим «всё в одном»: приложение открыто прямо из Google Apps Script.
+   Тогда облако уже подключено, ключ не нужен — сервер вызывается через google.script.run. */
+const TT_HOSTED = (typeof window !== 'undefined' && window.TT_HOSTED === true);
+const syncConfigured = () => TT_HOSTED || !!syncCfg().url;
+
+/* вызов серверной функции api(action, payload) внутри Apps Script */
+function gasCall(action, payload){
+  return new Promise((resolve, reject)=>{
+    if(!(window.google && window.google.script && window.google.script.run)){
+      reject(new Error('google.script недоступен — откройте приложение по адресу веб-приложения Google'));
+      return;
+    }
+    let done = false;
+    const tm = setTimeout(()=>{ if(!done){ done = true; reject(new Error('облако не ответило (таймаут)')); } }, 30000);
+    window.google.script.run
+      .withSuccessHandler(r=>{ if(done) return; done=true; clearTimeout(tm); resolve(r); })
+      .withFailureHandler(e=>{ if(done) return; done=true; clearTimeout(tm); reject(new Error((e && e.message) || 'ошибка на стороне Google')); })
+      .api(String(action || 'pull'), payload || null);
+  });
+}
+
+/* ---------- вспомогательное ---------- */
+function syncSig(r){ return r.start+'|'+r.end+'|'+(r.comment||''); }
+function syncCfg(){ const c = read(SYNC_CFG_KEY, {}) || {}; return { url:String(c.url||'').trim(), key:String(c.key||'').trim() }; }
+function syncSetCfg(c){ writeRaw(SYNC_CFG_KEY, { url:String(c.url||'').trim(), key:String(c.key||'').trim() }); }
+function syncSleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function syncNormRec(r){
+  return { id:String(r.id), start:+r.start, end:+r.end, comment:String(r.comment||''), upd:+(r.upd||0) };
+}
+
+/* ---------- статус в шапке ---------- */
+function syncStatus(kind, html){
+  const dot = syncEl('syncDot'), text = syncEl('syncText'), btn = syncEl('syncNow');
+  if(!dot || !text) return;
+  dot.className = 'sync-dot' + (kind==='ok'?' ok':kind==='busy'?' busy':kind==='err'?' err':kind==='dirty'?' dirty':'');
+  text.innerHTML = html;
+  if(btn) btn.classList.toggle('hidden', !syncConfigured() || kind==='busy');
+}
+function syncMsg(html){ const m=syncEl('cloudMsg'); if(m) m.innerHTML = html; }
+function syncHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+function syncPaint(){
+  if(!syncConfigured()){ syncStatus('off','<b>Облако не подключено</b> — записи только на этом устройстве'); return; }
+  if(syncBusy){ syncStatus('busy','Синхронизация…'); return; }
+  if(syncDirty){ syncStatus('dirty','<b>Есть несохранённые изменения</b> — ждём связи с облаком'); return; }
+  if(syncLastOk){ syncStatus('ok','Облако: всё синхронизировано · '+syncHHMM()); return; }
+  syncStatus('off','Облако настроено — идёт первая синхронизация…');
+}
+
+/* ---------- обнаружение локальных изменений (вызывается из write()) ---------- */
+function syncOnRecordsWrite(next){
+  const now = Date.now(), nextIds = new Set();
+  let changed = false;
+  for(const r of next){
+    nextIds.add(r.id);
+    if(syncSnap.get(r.id) !== syncSig(r)){ r.upd = now; changed = true; }
+  }
+  for(const id of syncSnap.keys()){
+    if(nextIds.has(id)) continue;                       // запись осталась
+    const t = syncTombs.find(x=>x.id===id);
+    if(t) t.upd = now; else syncTombs.push({ id:id, upd:now });
+    changed = true;
+  }
+  syncSnap = new Map(next.map(r=>[r.id, syncSig(r)]));
+  if(changed){
+    writeRaw(SYNC_TOMB_KEY, syncTombs);
+    syncDirty = true;
+    syncPaint();
+    syncQueue();
+  }
+}
+
+/* ---------- очередь автосинхронизации ---------- */
+let syncTimer = null;
+function syncQueue(delay){
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(()=>{ syncRun({ quiet:true }); }, delay||1500);
+}
+
+/* ---------- JSONP ---------- */
+function syncJsonp(params, timeout){
+  const cfg = syncCfg();
+  return new Promise((resolve, reject)=>{
+    const cb = '__ttcb' + (++syncCbSeq) + '_' + Date.now().toString(36);
+    const url = new URL(cfg.url);
+    Object.keys(params).forEach(k=> url.searchParams.set(k, params[k]));
+    url.searchParams.set('prefix', cb);
+    url.searchParams.set('_', String(Date.now()));
+
+    const script = document.createElement('script');
+    let done = false;
+    const finish = (fn, arg)=>{
+      if(done) return; done = true;
+      clearTimeout(tm);
+      try{ delete window[cb]; }catch(e){ window[cb] = undefined; }
+      script.remove();
+      fn(arg);
+    };
+    const tm = setTimeout(()=>finish(reject, new Error('облако не ответило (таймаут)')), timeout||20000);
+
+    window[cb] = data => finish(resolve, data);
+    script.onerror = ()=>finish(reject, new Error('нет связи с облаком'));
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
+}
+
+/* ---------- отправка (POST, ответ не читаем: no-cors) ---------- */
+async function syncPush(){
+  const cfg = syncCfg();
+  if(!cfg.url) return false;
+  const body = JSON.stringify({ key:cfg.key, records:records, tombs:syncTombs });
+  try{
+    await fetch(cfg.url, {
+      method:'POST',
+      mode:'no-cors',                                    // без CORS-префлайта, Apps Script нас не пустит иначе
+      headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body:body
+    });
+    // ответ opaque — успех подтверждаем последующим pull
+    return true;
+  }catch(e){
+    throw new Error('не удалось отправить данные в облако');
+  }
+}
+
+/* ---------- слияние: побеждает более свежая версия (по upd) ---------- */
+function syncMerge(remote){
+  const byId = new Map(), tombById = new Map();
+  for(const r of records) byId.set(r.id, syncNormRec(r));
+  for(const r of (remote.records||[])){
+    if(!r || !r.id) continue;
+    const cur = byId.get(String(r.id));
+    const cand = syncNormRec(r);
+    if(!cur || cand.upd > cur.upd) byId.set(cand.id, cand);
+  }
+  for(const t of syncTombs) if(t && t.id) tombById.set(t.id, +t.upd||0);
+  for(const t of (remote.tombs||[])) if(t && t.id) tombById.set(String(t.id), Math.max(tombById.get(String(t.id))||0, +t.upd||0));
+
+  for(const [id,upd] of tombById){
+    const r = byId.get(id);
+    if(r && r.upd <= upd) byId.delete(id);               // удаление свежее записи → убираем
+  }
+  const keep = [];
+  for(const [id,upd] of tombById) if(!byId.has(id)) keep.push({ id:id, upd:upd });
+
+  const merged = Array.from(byId.values()).sort((a,b)=> a.start-b.start);
+  const before = JSON.stringify(records.map(r=>[r.id,r.start,r.end,r.comment]).sort());
+  const after  = JSON.stringify(merged.map(r=>[r.id,r.start,r.end,r.comment]).sort());
+  const tombsChanged = JSON.stringify(keep) !== JSON.stringify(syncTombs);
+
+  records = merged;
+  syncTombs = keep;
+  syncSnap = new Map(records.map(r=>[r.id, syncSig(r)]));
+  writeRaw(SYNC_TOMB_KEY, syncTombs);
+  writeRaw(LS.rec, records);
+  if(before !== after || tombsChanged) render();
+  return { before:before, after:after };
+}
+
+/* ---------- полный цикл синхронизации ---------- */
+async function syncRun(opts){
+  const quiet = !!(opts && opts.quiet);
+  const cfg = syncCfg();
+  if(!syncConfigured()){ if(!quiet) syncMsg('Сначала вставьте URL веб-приложения и ключ, затем нажмите «Сохранить».'); return { ok:false, error:'облако не настроено' }; }
+  if(syncBusy) return { ok:false, error:'синхронизация уже идёт' };
+  syncBusy = true; syncPaint();
+
+  try{
+    /* 1-2. отправляем локальные правки и забираем актуальное состояние */
+    let data;
+    if(TT_HOSTED){
+      const needPush = syncDirty || !!(opts && opts.pushAll);
+      data = await gasCall(needPush ? 'sync' : 'pull', needPush ? { records:records, tombs:syncTombs } : null);
+      if(needPush) syncDirty = false;
+    }else{
+      if(syncDirty || (opts && opts.pushAll)){
+        await syncPush();
+        await syncSleep(700);                            // даём таблице записать
+        syncDirty = false;
+      }
+      data = await syncJsonp({ action:'pull', key:cfg.key });
+    }
+    if(!data || data.ok !== true) throw new Error((data && data.error) || 'облако вернуло ошибку (проверьте ключ)');
+
+    syncMerge(data);
+
+    /* 3. проверяем, что наши записи действительно доехали */
+    const serverIds = new Set((data.records||[]).map(r=>String(r.id)));
+    const missing = records.filter(r=>!serverIds.has(r.id));
+    if(missing.length){
+      syncDirty = true;
+      syncBusy = false;
+      syncStatus('err','Облако не приняло часть записей — попробуем ещё раз');
+      syncMsg('Не удалось записать в облако ' + missing.length + ' записей. Проверьте, что веб-приложение развёрнуто с доступом «Все» и ключ верный. Данные на этом устройстве целы.');
+      syncQueue(20000);
+      return { ok:false, error:'не все записи в облаке', missing:missing.length };
+    }
+
+    syncLastOk = Date.now();
+    syncBusy = false;
+    syncPaint();
+    const n = records.length;
+    syncMsg('Синхронизировано · записей в облаке: <b>'+n+'</b> · '+syncHHMM()+
+            '<br>Данные одинаковые на всех подключённых устройствах.');
+    return { ok:true, records:n };
+  }catch(err){
+    syncBusy = false;
+    syncStatus('err', 'Ошибка синхронизации — данные на устройстве целы');
+    syncMsg('Ошибка: ' + (err && err.message ? err.message : err) +
+            '<br>Данные не потеряны, они остаются в браузере. Проверьте URL и ключ, доступ «Все» у веб-приложения и интернет.');
+    if(syncDirty) syncQueue(30000);
+    return { ok:false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+/* ---------- интерфейс настроек ---------- */
+function syncFillForm(){
+  const cfg = syncCfg();
+  const u = syncEl('cloudUrl'), k = syncEl('cloudKey');
+  if(u) u.value = cfg.url;
+  if(k) k.value = cfg.key;
+  if(cfg.url && !syncLastOk){
+    syncMsg('Облако настроено. Нажмите «Проверить связь», чтобы синхронизировать прямо сейчас.');
+  }
+}
+
+(function syncBind(){
+  const openBtn = syncEl('syncOpen');
+  if(openBtn) openBtn.addEventListener('click', ()=>{
+    const card = syncEl('syncCard');
+    if(card){ card.open = true; card.closest('.card').scrollIntoView({ behavior:'smooth', block:'center' }); }
+  });
+
+  const nowBtn = syncEl('syncNow');
+  if(nowBtn) nowBtn.addEventListener('click', ()=> syncRun({}));
+
+  const saveBtn = syncEl('cloudSave');
+  if(saveBtn) saveBtn.addEventListener('click', ()=>{
+    const url = (syncEl('cloudUrl').value||'').trim();
+    const key = (syncEl('cloudKey').value||'').trim();
+    if(!url){ syncMsg('Вставьте URL веб-приложения (заканчивается на /exec).'); return; }
+    if(!/^https:\/\//i.test(url)){ syncMsg('URL должен начинаться с https://'); return; }
+    syncSetCfg({ url:url, key:key });
+    syncMsg('Сохранено. Проверяем связь…');
+    syncRun({});
+  });
+
+  const testBtn = syncEl('cloudTest');
+  if(testBtn) testBtn.addEventListener('click', ()=> syncRun({}));
+
+  const pushAllBtn = syncEl('cloudPushAll');
+  if(pushAllBtn) pushAllBtn.addEventListener('click', ()=>{
+    if(!syncCfg().url){ syncMsg('Сначала сохраните URL и ключ.'); return; }
+    syncDirty = true;
+    syncRun({ pushAll:true });
+  });
+
+  const pullBtn = syncEl('cloudPull');
+  if(pullBtn) pullBtn.addEventListener('click', ()=> syncRun({}));
+
+  /* автосинхронизация */
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden && syncConfigured()) syncRun({ quiet:true });
+  });
+  window.addEventListener('focus', ()=>{ if(syncConfigured()) syncRun({ quiet:true }); });
+  setInterval(()=>{ if(!document.hidden && syncConfigured()) syncRun({ quiet:true }); }, 120000);
+
+  /* старт */
+  /* режим «всё в одном»: прячем настройки, показываем карточку с таблицей */
+  if(TT_HOSTED){
+    const settingsCard = syncEl('syncCard') && syncEl('syncCard').closest('.card');
+    if(settingsCard) settingsCard.classList.add('hidden');
+    const hosted = syncEl('hostedCard');
+    if(hosted) hosted.classList.remove('hidden');
+    const openBtn0 = syncEl('syncOpen');
+    if(openBtn0) openBtn0.classList.add('hidden');
+    const link = syncEl('sheetLink');
+    if(link && window.TT_SHEET_URL){ link.href = window.TT_SHEET_URL; }
+    else if(link){ link.classList.add('hidden'); }
+    const hs = syncEl('hostedSync');
+    if(hs) hs.addEventListener('click', ()=> syncRun({}));
+  }
+
+  syncFillForm();
+  syncPaint();
+  if(syncConfigured()) syncQueue(400);
+})();
+
+/* ---------- инициализация локального состояния ---------- */
+(function syncInit(){
+  /* проставляем upd старым записям (раньше его не было) */
+  let touched = false;
+  for(const r of records){
+    if(!r.upd){ r.upd = r.end || r.start || 0; touched = true; }
+  }
+  /* применяем «надгробия», если запись успела вернуться из другого источника */
+  if(syncTombs.length){
+    const tomb = new Map(syncTombs.map(t=>[t.id, +t.upd||0]));
+    const kept = records.filter(r=>{
+      const u = tomb.get(r.id);
+      return !(u !== undefined && (r.upd||0) <= u);
+    });
+    if(kept.length !== records.length){ records = kept; touched = true; }
+  }
+  if(touched) writeRaw(LS.rec, records);
+  syncSnap = new Map(records.map(r=>[r.id, syncSig(r)]));
+  writeRaw(SYNC_TOMB_KEY, syncTombs);
+})();
+</script>
+
+</body>
+</html>
